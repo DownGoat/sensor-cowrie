@@ -3,17 +3,17 @@ import time
 import ujson
 import requests
 
-NIKKI_DOMAIN = "http://hp.puse.cat"
+NIKKI_DOMAIN = "http://localhost:8000"
 
 
 # Settings for cowrie ssh honeypot
-CR_LOG_DIR = "C:\\Users\\puse\\Desktop\\log"
+CR_LOG_DIR = "C:\\Users\\puse\\Desktop\\aika\\log"
 
 
-filename = os.path.join(CR_LOG_DIR, "log.short.json")
+filename = os.path.join(CR_LOG_DIR, "cowrie.json.2017_1_8")
 
 sessions = dict()
-
+login_attempts = []
 
 class FileReader():
     """
@@ -43,24 +43,25 @@ class FileReader():
 
 def send_session(session):
     # The data found with these keys are not needed by Nikki, so let's just delete them to save bandwidth.
-    not_needed = ["system", "message", "eventid", "isError", "compCS", "dst_port", "dst_ip", "attempts", "success", "sent"]
+    wanted_keys = ["encCS", "kexAlgs", "keyAlgs", "macCS", "sensor", "session", "src_ip", "src_port", "timestamp", "version"]
     copy = dict(session)
-    for key in not_needed:
-        del session[key]
 
     post_data = {
         "model": "cowrie.SSHSession",
-        "fields": session,
+        "fields": {},
     }
 
+    for key in wanted_keys:
+        post_data["fields"][key] = session[key]
+
     try:
-        r = requests.post(NIKKI_DOMAIN + "/cowrie/event", ujson.dumps([post_data]))
+        r = requests.post(NIKKI_DOMAIN + "/cowrie/session", ujson.dumps([post_data]))
         response_json = ujson.loads(r.text)
     except Exception:
-        print("[FAIL] Nikki is not responding.")
+        print("[FAIL] SSHSession - Nikki is not responding.")
         return copy
 
-    if r.status_code != 200 or response_json.get("success", False):
+    if r.status_code == 200 or response_json.get("success", False):
         print("[OK] {0} - {1}".format(session["session"], session["src_ip"]))
     else:
         print("[FAIL] {0} - {1}: {2}".format(session["session"], session["src_ip"], response_json["msg"]))
@@ -69,13 +70,28 @@ def send_session(session):
     return copy
 
 
+def send_login_details(login_details):
+    try:
+        r = requests.post(NIKKI_DOMAIN + "/cowrie/login-details", ujson.dumps(login_details))
+        response_json = ujson.loads(r.text)
+    except Exception:
+        print("[FAIL] LoginDetails - Nikki is not responding.")
+        return login_details
+
+    if r.status_code == 200 or response_json.get("success", False):
+        print("[OK] LoginDetails - length:{0}".format(len(login_details)))
+    else:
+        print("[FAIL] LoginDetails - length:{0}".format(len(login_details)))
+
+    return []
+
+
 def parse_event(event):
     session_id = event.get("session")
     if sessions.get(session_id) is None:
         sessions[session_id] = {
             "success": False,
             "sent": False,
-            "attempts": 1,
         }
 
     if event["eventid"] == "cowrie.client.version":
@@ -86,11 +102,17 @@ def parse_event(event):
         event["encCS"] = "\n".join(event["encCS"])
 
     if event["eventid"].startswith("cowrie.login."):
-        sessions[session_id]["password{0}".format(sessions[session_id]["attempts"])] = event["password"]
-        sessions[session_id]["username{0}".format(sessions[session_id]["attempts"])] = event["username"]
-        sessions[session_id]["attempts"] += 1
+        login_attempts.append({
+            "model": "cowrie.LoginDetails",
+            "fields":
+                {
+                    "username": event["username"],
+                    "password": event["password"],
+                    "association": "SSH:{0}".format(session_id)
+                }
+        })
 
-        if sessions[session_id]["attempts"] == 4 or event["eventid"].startswith("cowrie.login.success"):
+        if event["eventid"].startswith("cowrie.login.success"):
             sessions[session_id]["success"] = True
 
     elif event["eventid"] == "cowrie.session.closed":
@@ -111,9 +133,10 @@ while True:
     finished_sessions = []
     for session_id, session in sessions.items():
         if session["success"]:
-            session[session_id] = send_session(session)
+            sessions[session_id] = send_session(session)
+            login_attempts = send_login_details(login_attempts)
 
-            if session[session_id]["sent"]:
+            if sessions[session_id]["sent"]:
                 finished_sessions.append(session_id)
 
     for session_id in finished_sessions:
