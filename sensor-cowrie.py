@@ -60,13 +60,12 @@ def send_session(session):
         print("[FAIL] Nikki is not responding.")
         return copy
 
-    if response_json["success"]:
+    if r.status_code != 200 or response_json.get("success", False):
         print("[OK] {0} - {1}".format(session["session"], session["src_ip"]))
     else:
         print("[FAIL] {0} - {1}: {2}".format(session["session"], session["src_ip"], response_json["msg"]))
 
     copy["sent"] = True
-
     return copy
 
 
