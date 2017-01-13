@@ -3,7 +3,7 @@ import time
 import ujson
 import requests
 
-NIKKI_DOMAIN = "http://localhost:8000"
+NIKKI_DOMAIN = "http://hp.puse.cat"
 
 
 # Settings for cowrie ssh honeypot
@@ -41,25 +41,8 @@ class FileReader():
         return lines
 
 
-def save_process(offset, session):
-    json = ujson.dumps({"offset": offset, "session": session})
-    fd = open("progress.json", "w")
-    fd.write(json)
-    fd.close()
-
-
-def load():
-    """
-    fd = open("progress.json", "r")
-    data = fd.read()
-    json = ujson.loads(data)
-
-    return json.get("offset"), json.get("session")
-    """
-    return 0, None
-
-
 def send_session(session):
+    # The data found with these keys are not needed by Nikki, so let's just delete them to save bandwidth.
     not_needed = ["system", "message", "eventid", "isError", "compCS", "dst_port", "dst_ip", "attempts", "success", "sent"]
     copy = dict(session)
     for key in not_needed:
@@ -69,8 +52,13 @@ def send_session(session):
         "model": "cowrie.SSHSession",
         "fields": session,
     }
-    r = requests.post(NIKKI_DOMAIN + "/cowrie/event", ujson.dumps([post_data]))
-    response_json = ujson.loads(r.text)
+
+    try:
+        r = requests.post(NIKKI_DOMAIN + "/cowrie/event", ujson.dumps([post_data]))
+        response_json = ujson.loads(r.text)
+    except Exception:
+        print("[FAIL] Nikki is not responding.")
+        return copy
 
     if response_json["success"]:
         print("[OK] {0} - {1}".format(session["session"], session["src_ip"]))
@@ -113,7 +101,6 @@ def parse_event(event):
         sessions[session_id] = {**sessions[session_id], **event}
 
 
-offset, _ = load()
 file_reader = FileReader()
 while True:
     lines = file_reader.readlines()
@@ -133,5 +120,4 @@ while True:
     for session_id in finished_sessions:
         del sessions[session_id]
 
-    #save_process(offset, None)
     time.sleep(5)
