@@ -1,0 +1,1 @@
+This is the sensor for Cowrie used to send information to Nikki.
