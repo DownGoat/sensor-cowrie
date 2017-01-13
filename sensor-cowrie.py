@@ -10,7 +10,7 @@ NIKKI_DOMAIN = "http://localhost:8000"
 CR_LOG_DIR = "C:\\Users\\puse\\Desktop\\aika\\log"
 
 
-filename = os.path.join(CR_LOG_DIR, "cowrie.json.2017_1_8")
+filename = os.path.join(CR_LOG_DIR, "cowrie.json.2017_1_9")
 
 sessions = dict()
 login_attempts = []
@@ -51,8 +51,9 @@ def send_session(session):
         "fields": {},
     }
 
+    print(session["session"])
     for key in wanted_keys:
-        post_data["fields"][key] = session[key]
+        post_data["fields"][key] = session.get(key, None)
 
     try:
         r = requests.post(NIKKI_DOMAIN + "/cowrie/session", ujson.dumps([post_data]))
@@ -134,7 +135,7 @@ while True:
     for session_id, session in sessions.items():
         if session["success"]:
             sessions[session_id] = send_session(session)
-            login_attempts = send_login_details(login_attempts)
+            #login_attempts = send_login_details(login_attempts)
 
             if sessions[session_id]["sent"]:
                 finished_sessions.append(session_id)
