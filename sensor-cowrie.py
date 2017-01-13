@@ -3,7 +3,7 @@ import time
 import ujson
 import requests
 
-__version__ = 0.1
+__version__ = "0.1.1"
 
 NIKKI_DOMAIN = "http://localhost:8000"
 
@@ -12,7 +12,7 @@ NIKKI_DOMAIN = "http://localhost:8000"
 CR_LOG_DIR = "C:\\Users\\puse\\Desktop\\aika\\log"
 
 
-filename = os.path.join(CR_LOG_DIR, "cowrie.json.2017_1_11")
+filename = os.path.join(CR_LOG_DIR, "cowrie.json")
 
 sessions = dict()
 login_attempts = []
@@ -140,7 +140,7 @@ while True:
         if session["success"]:
             sessions[session_id] = send_session(session)
             # Only send 20 sessions for each request.
-            login_attempts = login_attempts + send_login_details(login_attempts[:20])
+            login_attempts = login_attempts[20:] + send_login_details(login_attempts[:20])
 
             if sessions[session_id]["sent"]:
                 finished_sessions.append(session_id)
